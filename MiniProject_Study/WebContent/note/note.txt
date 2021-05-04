@@ -1,0 +1,482 @@
+1. 6번째까지 복습완료
+만날수 있는 오류
+
+org.apache.jasper.JasperException: 행 [35]에서 [WEB-INF/view/include/top_menu.jsp]을(를) 처리하는 중 예외 발생
+
+32: 		<ul class="navbar-nav">
+33: 			<c:forEach var="dto" items="${topMenuList}">
+34: 				<li class="nav-item"><a
+35: 					href="${root}board/main?board_info_idx=${dto.board_info_idx}"
+36: 					class="nav-link">${dto.board_info_name}</a></li>
+37: 			</c:forEach>
+38: 		</ul>
+
+javax.servlet.ServletException: javax.servlet.jsp.JspException: javax.el.PropertyNotFoundException:
+타입 [com.tjoeun.spring.dto.BoardInfoDTO]에서 프로퍼티 [board_info_idx]을(를) 찾을 수 없습니다.
+근본 원인 (root cause)
+
+javax.el.PropertyNotFoundException: 타입 [com.tjoeun.spring.dto.BoardInfoDTO]에서 
+프로퍼티 [board_info_idx]을(를) 찾을 수 없습니다.
+
+============================================= 해결책 ===========================================================
+@Data인 Annotation을 이클립스가 인식하지 못해서 생겨나는 오류임.
+따라서 이클립스가 인식할 수 있게 해주는 것이 핵심
+
+이 페이지 참고
+https://stackoverflow.com/questions/45461777/lombok-problems-with-eclipse-oxygen/45463023
+
+lombok을 깔아서 진행하면 이클립스가 인식하게 되므로 오류가 해결이 된다.
+
+================================================================================================================
+
+컨트롤러 (회원가입 유효성까지 정리)
+1) HomeController
+2) BoardController
+3) UserController
+4) MainController
+================================================================================================================
+<회원가입 유효성까지 공부한 결과 미니 프로젝트 스프링 흐름도>
+
+<시작>
+HomeController -> 리다이렉트로 /main 매핑으로 main.jsp가 실행됨
+[	이때 ! 인터셉트가 등장
+	클라이언트의 요청이 컨트롤러로 가기전에 가로채어서 정보를 가공하는 것인데
+	Handler Interceptor로 이 공부하는 프로젝트에서는 TopMenuInterceptor가 그 역할을 수행한다.	
+	즉, HomeController로 웹브라우저가 요청을 하기 전에 먼저 TopMenuInterceptor가 수행된다는 것이다
+	(정확히는 TopMenuInterceptor의 Handler가 동작된다.) 
+	단계는 다음과 같음.
+	1) TopMenuInterceptor : TopMenuService 호출 topMenuList 객체 생성
+	2) TopMenuService : getTopMenuList를 통해 TopMenuDAO 호출
+	3) TopMenuDAO : getTopMenuList를 통해 TopMenuMapper 호출
+	4) TopMenuMapper : 여기서 어노테이션을 통해 DB 접근하여 메뉴 리스트를 가져옴
+
+	순서 : TopMenuInterceptor -> TopMenuService -> TopMenuDAO -> TopMenuMapper -> DB
+
+	가져온후 TopMenuInterceptor는 jsp때 처럼 request.setAttribute를 통해서
+	가져온 DB정보를 top_menu.jsp에 전달해준다.
+	그래서 top_menu.jsp 에서 ${topMenuList} 통해서 정보에 접근이 가능하다.
+]
+main.jsp ->top_menu.jsp   
+		 ->bottom_info.jsp 이 두가지가 import 되어있음
+
+1) top_menu.jsp
+여기는 메인 홈페이지의 상단 부분을 다루고 있는데 
+
+로고부분에는 보드컨트롤러 /main Mapping 
+게시판 목록 부분은 
+1) 위와 같이 Interceptor를 통해 가져온걸로 게시판을 만들었음(c:foreach 활용)
+
+=================================================================================================================
+
+<회원 가입 유효성 동작 흐름>
+1) join.jsp에서 <form:form>을 사용해서 폼요소를 joinUserDTO라는 UserDTO 객체에 바인딩시킨다.
+바인딩 방식은 post방식
+
+2) UserController - joinProc함수 : 매개변수는 (@Valid @ModelAtrribute UserDTO joinUserDTO, BindResult result)
+--> 즉 이 함수에는 UserDTO 객체에 대한 유효성 검사가 필요하고 검사 결과값이 필요하다
+@Valid : 객체에 대한 유효성 검사 지정 어노테이션
+BindResult : 유효성 검사 결과값 가지고 있는 객체
+
+@Valid 어노테이션으로 UserDTO에 대한 유효성 검사 진행
+UserDTO에서 유효성을 검사함.
+
+@Size는 4 ~ 20 사이인지
+@Pattern 들어온 값이 지정한 문자 범위인지
+들어온 데이터가 유효한지 검사를 하게 된다.
+
+3) 검사가 끝나고 값에 따라 jsp 파일 매핑이 달라진다.
+여기서는 return "/join/join_proc";
+
+--> 오류가 있다면 <form:form error> 부분에 에러 메시지를 뿌려줌으로 유효성 검사 결과를 유저에게 알려준다.
+
+===================================================================================================================
+
+<로그인 유효성 동작 흐름>
+
+1) top_menu.jsp의 login을 누르면 컨트롤러에 요청이 감 (/user/login)
+2) login.jsp 페이지가 나오게 됨
+3) <form:form> 태그를 사용하여 loginUserDTO라는 이름으로 객체를 생성한다 이때 방식은 Post방식 매핑은 user/login_proc
+4) user/login_proc으로 컨트롤러에 요청되고 거기에 @Valid 어노테이션으로 유효성 검사가 있다.
+5) @InitBinder 라는 어노테이션으로 유효성 검사하려고 객체를 가져오기 전에 수행될 메소드를 지정할수 있다.
+--> 여기서는 
+	@InitBinder
+	public void initBinder(WebDataBinder binder) {
+		UserValidator validator1 = new UserValidator();
+		binder.addValidators(validator1);
+	} 
+	==> 바로 회원가입시 입력한 비밀번호가 같은지 여부를 확인하는 UserValidator라는 클래스가 있었다.
+
+===================================================================================================================
+<error_message.properties 안하면 이런 오류가 뜸>
+
+메시지 org.springframework.context.NoSuchMessageException: 
+No message found under code 'DontCheckUserIdExist.joinUserDTO.user_id' for locale 'ko_KR'.
+
+org.apache.jasper.JasperException: org.springframework.context.NoSuchMessageException: 
+No message found under code 'DontCheckUserIdExist.joinUserDTO.user_id' for locale 'ko_KR'.
+	
+근본 원인 (root cause)
+
+org.springframework.context.NoSuchMessageException: 
+No message found under code 'DontCheckUserIdExist.joinUserDTO.user_id' for locale 'ko_KR'.
+
+==> 에러 메시지를 띄워줄 한글 프로퍼티가 없으니 당연지사!
+===================================================================================================================
+
+		@Bean
+		public MapperFactoryBean<UserMapper> getUserMapper(SqlSessionFactory factory) throws Exception {
+			MapperFactoryBean<UserMapper> factoryBean = new MapperFactoryBean<UserMapper>(UserMapper.class);
+			factoryBean.setSqlSessionFactory(factory); <-- 코딩하다가 이부분을 놓쳤는데 다음과 같은 오류가 나옴
+			return factoryBean;
+		}
+		
+javax.servlet.ServletException: 서블릿 [dispatcher]을(를) 위한 Servlet.init() 호출이 예외를 발생시켰습니다.
+
+근본 원인 (root cause)
+
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'restAPIController':
+Unsatisfied dependency expressed through field 'userService'; 
+ 
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'userService': Unsatisfied dependency expressed through field 'userDAO';
+ 
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'userDAO': Unsatisfied dependency expressed through field 'userMapper'; 
+  
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getUserMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+  
+Invocation of init method failed; nested exception is java.lang.IllegalArgumentException:
+Property 'sqlSessionFactory' or 'sqlSessionTemplate' are required
+	
+근본 원인 (root cause)
+
+org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'userService': Unsatisfied dependency expressed through field 'userDAO'; 
+
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'userDAO': Unsatisfied dependency expressed through field 'userMapper'; 
+
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getUserMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; 
+
+nested exception is java.lang.IllegalArgumentException: 
+Property 'sqlSessionFactory' or 'sqlSessionTemplate' are required
+
+근본 원인 (root cause)
+
+org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'userDAO': Unsatisfied dependency expressed through field 'userMapper'; 
+
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getUserMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; nested exception is java.lang.IllegalArgumentException: 
+Property 'sqlSessionFactory' or 'sqlSessionTemplate' are required
+
+근본 원인 (root cause)
+
+org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getUserMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; 
+
+nested exception is java.lang.IllegalArgumentException: 
+Property 'sqlSessionFactory' or 'sqlSessionTemplate' are required
+
+근본 원인 (root cause)
+
+java.lang.IllegalArgumentException: Property 'sqlSessionFactory' or 'sqlSessionTemplate' are required
+
+==> 당연히 SqlSession을 설정해주지 안했으니 Bean등록이 안되어 오류가 날수 밖에....
+
+=========================================================================================================
+로그인정보를 SessionScope에 있는 loginUserDTO에 저장하기
+
+- loginSuccess.jsp가 없는데 동작되던 선생님의 코드가 문제였다..
+
+=========================================================================================================
+로그인 로그아웃까지 적용함
+
+흐름 파악
+1) top_menu.jsp -> 로그인 버튼("/user/login) 매핑 발생 -> UserController 가기전에 @InitBinder가 지정된 메소드 수행
+2) UserController : /user/login 매핑에 따라 login.jsp 매핑
+3) login.jsp 동작 로그인 폼 작성
+4) 로그인 버튼 클릭 -> "/user/login_proc" 메핑 발생 -> UserController 가기전에 @InitBinder가 지정된 메소드 수행
+5) @PostMapping("/login_proc")
+	public String loginProc(@Valid @ModelAttribute("tmpLoginUserDTO") UserDTO tmpLoginUserDTO, BindingResult result) {
+		if(result.hasErrors()) {
+			return "user/login";
+		}
+		
+		userService.getLoginUser(tmpLoginUserDTO);
+		
+		if(loginUserDTO.isUserLogin() == true) {
+			return "user/login_success";
+		} else {
+			return "user/login_failure";
+		}
+	}
+	==> 수행 : UserController -> userService.getLoginUser -> userDAO.getLoginUser -> userMapper.getLoginUser -> DB
+	    결과 : UserService에서 getLoginUser로 UserDTO가 셋팅되면서 그 셋팅된 값을 가져온다.
+	    
+	    public void getLoginUser(UserDTO tmpLoginUserDTO) {
+		UserDTO fromDBUserDTO = userDAO.getLoginUser(tmpLoginUserDTO);
+		
+		if(fromDBUserDTO != null) {
+			loginUserDTO.setUser_idx(fromDBUserDTO.getUser_idx());
+			loginUserDTO.setUser_name(fromDBUserDTO.getUser_name());
+			loginUserDTO.setUserLogin(true);
+		}
+		
+	==> 따라서 이 inUserLogin이 true인지 false인지를 파악해서 로그인이 성공했는지 안했는지 알수 있다.
+			true -> login_success.jsp
+			false -> login_failure.jsp 
+		이 inUserLogin정보로 로그인 하고 안하고에 따라 웹페이지 접근을 제한 할수 있는 것이다!
+		
+===============================================================================================================================
+<적용하며 발생한 오류>
+
+	@Select("SELECT USER_IDX, USER_NAME FROM USER_TABLE" + <-- 공백을 줘야 됨
+			"WHERE USER_ID=#{user_id} AND USER_PW=#{user_pw}")
+	UserDTO getLoginUser(UserDTO tmploginUserDTO);
+	
+	안그럼 이런 오류 만난다 SQL: SELECT USER_IDX, USER_NAME FROM USER_TABLEWHERE USER_ID=? AND USER_PW=? <- USER_TABLEWHERE로 SQL을 인식 못함
+	
+	@Select("SELECT USER_IDX, USER_NAME FROM USER_TABLE " + 공백을 주면 해결됨
+			"WHERE USER_ID=#{user_id} AND USER_PW=#{user_pw}")
+	UserDTO getLoginUser(UserDTO tmploginUserDTO);
+	
+ 	### 내 실수로 일어난 오류 ###
+ 	userService.getLoginUser(tmpLoginUserDTO);
+ 	userController login_proc에 추가 안해서 로그인이 안되던 것이었음.
+ 	
+ 	현재 회원 정보 수정까지 완료하였음
+ 	
+================================================================================================================================
+<게시판에 글 쓰는 작업과 파일 업로드 적용해본 결과 다음과 같은 오류 발견>
+
+근본 원인 (root cause)
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'boardController': 
+Unsatisfied dependency expressed through field 'boardService'; 
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'boardService': Unsatisfied dependency expressed through field 'boardDAO'; 
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'boardDAO': Unsatisfied dependency expressed through field 'boardMapper'; 
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getBoardMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; 
+nested exception is java.lang.IllegalArgumentException: 
+org.apache.ibatis.builder.BuilderException: Error resolving JdbcType. 
+Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+
+근본 원인 (root cause)
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'boardService': 
+Unsatisfied dependency expressed through field 'boardDAO'; 
+nested exception is org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'boardDAO': Unsatisfied dependency expressed through field 'boardMapper'; 
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getBoardMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; nested exception is java.lang.IllegalArgumentException: 
+org.apache.ibatis.builder.BuilderException: Error resolving JdbcType. 
+Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+	
+근본 원인 (root cause)
+org.springframework.beans.factory.UnsatisfiedDependencyException: 
+Error creating bean with name 'boardDAO': 
+Unsatisfied dependency expressed through field 'boardMapper'; 
+nested exception is org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getBoardMapper' defined in com.tjoeun.spring.config.ServletAppContext:
+Invocation of init method failed; nested exception is java.lang.IllegalArgumentException: 
+org.apache.ibatis.builder.BuilderException: Error resolving JdbcType. 
+Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+	
+근본 원인 (root cause)
+org.springframework.beans.factory.BeanCreationException: 
+Error creating bean with name 'getBoardMapper' defined in com.tjoeun.spring.config.ServletAppContext: 
+Invocation of init method failed; 
+nested exception is java.lang.IllegalArgumentException: 
+org.apache.ibatis.builder.BuilderException: Error resolving JdbcType. 
+Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+	
+근본 원인 (root cause)
+java.lang.IllegalArgumentException: org.apache.ibatis.builder.BuilderException: 
+Error resolving JdbcType. Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+	
+근본 원인 (root cause)
+org.apache.ibatis.builder.BuilderException: Error resolving JdbcType. 
+Cause: java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+	
+근본 원인 (root cause)
+java.lang.IllegalArgumentException: No enum constant org.apache.ibatis.type.JdbcType.varchar
+
+==> BoardMapper에 JDBC Type에 문제가 있다고 나오는데 이것이 소문자도 인식할수 있는 걸로 생각했지만 
+대소문자를 구분을 한다...... 조심하자
+
+@Insert("INSERT INTO CONTENT_TABLE" +
+			"VALUES(CONTENT_SEQ.NEXTVAL, #{content_subject}," +
+			"#{content_text}, #{content_file, jdbcType=VARCHAR <== 요놈 varchar로 하면 에러남}, #{content_writer_idx}, " +
+			"#{content_board_idx}, SYSDATE)")
+	void addContentInfo(ContentDTO writeContentDTO);
+
+===============================================================================================================================
+AJAX : Asynchronous Javascript And XML
+         Asynchronized 
+
+	
+	로그인하지 않으면
+	회원정보 수정 페이지로 접근하지 못하도록 함
+	
+	Interceptor에서 로그인 되었는지 확인하고
+	로그인 되었을 경우에만 접근할 수 있도록 함
+	
+	
+	파일 업로드시
+	form tag 에 
+	설정해야 하는 속성
+	
+	enctype="multipart/form-data
+	
+	  ㄴ 문자열 타입 데이터와
+	     다른 형식의 파일들을 모두
+	     server로 전송할 수 있게 해줌 
+	     
+	      
+	enctype="multipart/form-data
+	를 설정했을 때
+	data가 전송되는 방식이 달라져서
+	유효성검사가 정상적으로 되지 않음
+	(데이터가 기존의 방식으로는 전송되지 않음)
+	
+	servletAppContext.java에
+	
+	Bean을 등록해서 해결함
+	"StandardServletMultipartResolver"
+	enctype="multipart/form-data
+	를 설정했을 때
+	data가 정상적으로 전송되게 함
+
+
+    파일을 업로드하는 경우,
+    반드시 절대경로를 지정해야 함
+     ㄴ 서버에 이 경로를 등록해야 함
+     
+     
+    파일 첨부를 안 하는 경우,
+    ContentDTO 의 content_file에는 null이 저장되고
+    database 의 CONTENT_TABLE 의 CONTENT_FILE 컬럼에도
+    NULL 이 저장되는데, 이 경우 MyBatis 에서
+    #{content_file, jdbcType=VARCHAR}
+    와 같이 jdbcType=VARCHAR 설정을 해 주어야
+               ㄴ type을 명시함 
+    오류가 발생하지 않음
+    
+=====================================================================================================================================
+파일 업로드 적용
+파일을 서버에 업로드 시킬때 중요한게 있다.
+<form:form action="${root }board/write_proc" method="post" modelAttribute="writeContentDTO" enctype="multipart/form-data">
+취급할 파일이 이미지 동영상 음악도 있으므로 multipart형태로 브라우저를 통해 서버로 전송해줄텐데 
+이 multipart 를 동작하게 하려면 
+
+	@Bean
+	public StandardServletMultipartResolver multipartResolver() {
+		return new StandardServletMultipartResolver();
+	}
+	
+서블릿에 지정을 해주어야 한다 그런데 
+org.springframework.web.util.NestedServletException: Request processing failed; nested exception is java.lang.NullPointerException
+java.lang.NullPointerException
+	com.tjoeun.spring.service.BoardService.addContentInfo(BoardService.java:50)
+	com.tjoeun.spring.controller.BoardController.board_WriteProc(BoardController.java:51)
+이러한 오류를 만났다 난 분명 주신 소스대로 다 작성 했는데 동작이 되지 않아서 많은 고민과 시간을 들였으나......
+오류를 마침내 해결하였으니.... 바로 오타였다..... ㅠㅠㅠㅠㅠㅠㅠㅠ
+
+	@Bean
+	public StandardServletMultipartResolver multipartResolver()<-- 요놈을 multtipartResolver()오타를 냈다... {
+		return new StandardServletMultipartResolver();
+	}
+	
+	매정한 컴파일러 같으니.... 왜 안알려주는 거여 ㅠㅠ
+	스프링이 정한 프레임워크에 벗어난 메소드 이름이니 당연히 정상적으로 데이터가 서버로 전송이 될수가 없지....
+	항시 오타가 없는지 잘 보아야 할거 같다.
+	
+	구글에서 찾은것....
+	스프링 웹 프레임 워크와 함께 제공되는 StandardServletMultipartResolver를 사용하여 내 문제를 해결했습니다. 
+	그러나 이것이 작동하려면 Servlet 버전 3.0 이상을 사용해야합니다.
+	
+=====================================================================================================================================
+ < 게시글 작성한 후 바로 자신의 글이 보여지는 순서 >
+   
+   글쓰기 페이지(write.jsp)에서 글을 다 작성하고
+   작성하기 버튼을 누르면
+   BoardController의 "board/write_proc" 메소드(writeProc)으로
+   이동함
+   
+   여기서 parameter (@ModelAttribute) 로 주입받은
+   객체(writeContentDTO)의 주소를 boardService.addContentInfo(writeContentDTO)을
+     ㄴ 현재 writeContentDTO에는 글쓴이가 write.jsp에서
+        입력한 내용들이 저장되어있음
+   실행하면서 argument로 넣어줌
+   
+   service -> dao -> mapper 로 가면서 동일한 주소(객체)가 전달됨
+   
+   @Insert 를 실행하기 전에
+   @SelectKey 를 실행해서
+   현재 content_seq의 값에서 하나 증가한 값을 구해서
+     ㄴ select content_seq.nextval from dual
+   mapper로 전달한 객체(BoardController -> service -> dao -> mapper)
+   [writeContentDTO]의 멤버변수 content_idx에 저장함
+   
+   이후,
+      @Insert 의 value(#{content_idx}...)에 이 값이 전달되어
+      현재 insert되는 게시글의 content_idx값이 됨
+        ㄴ 게시글 번호가 하나 증가됨
+        
+        
+     <-- 이렇게 해야
+         DB의 CONTENT_TABLE에 새로 저장되는 글의 content_idx도
+         하나 증가하고 writeContetnDTO의 멤버변수 content_idx의
+         값도 하나 증가됨
+         
+     ㄴ BoardController의 
+        @PostMapping("/write_proc")
+	    public String writeProc    메소드 속에 있는
+	    writeContetnDTO의 멤버변수 content_idx는 위에서 
+	    하나 증가한 값을 가지고 있게 됨
+	    
+	 ㄴ 이 증가된 content_idx 값을
+	    return "board/write_success"; 으로 실행되는
+	    write_success.jsp에서 EL로 사용할 수 있음
+	    
+	 ㄴ location.href = '${root}board/read?board_info_idx=${writeContentDTO.content_board_idx}&content_idx=${writeContentDTO.content_idx}';   
+	    
+	      ㄴ read.jsp 로 페이지 이동하면서 
+	         get방식으로
+	         board_info_idx 값과
+	         content_idx의 값을 
+	         BoardController 의
+	         @GetMapping("/read")
+	         public String read 에 전달함
+	         
+	 ㄴ @GetMapping("/read")
+	    public String read     에서
+	    @RequestParam("board_info_idx") int board_info_idx,
+	    @RequestParam("content_idx") int content_idx
+	    으로 주입받은 
+	    
+	    board_info_idx 을	    
+	    model.addAttribute("board_info_idx", board_info_idx)
+	     ㄴ Request 객체에 저장하고
+	         ㄴ 이 값은 "목록보기"버튼을 눌렀을 때
+	            해당 게시판의 글들만 출력하고자 할 때 사용함
+	            
+	    content_idx 는
+	    ContentDTO readContentDTO
+		  = boardService.getContentInfo(content_idx); 으로
+		방금 작성한 글을 가져오기 위해서 사용함
+		  
+		  
+		방금 작성한 글을 가져온 후
+		model.addAttribute("readContentDTO", readContentDTO);
+		  ㄴ Request 객체에 저장함
+		      ㄴ read.jsp에서 EL을 사용해서
+		         내용을 화면에 출력함

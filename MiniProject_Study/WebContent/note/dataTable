@@ -1,0 +1,39 @@
+"게시판 정보 테이블
+board_info_table"					
+					type		   NULL	PK	FK	UQ
+"게시판 번호
+board_info_idx"		number			X	O	X	O
+"게시판 이름
+board_info_name"	varchar2(500)	X	X	X	X
+
+					
+"사용자 정보 테이블
+user_table"					
+			type		  NULL  PK	FK	UQ
+"사용자 번호
+user_idx"	number			X	O	X	O
+"사용자 이름
+user_name"	varchar2(50)	X	X	X	X
+"사용자 아이디
+user_id"	varchar2(100)	X	X	X	O
+"사용자 비밀번호
+user_pw"	varchar2(100)	X	X	X	X
+
+					
+"게시글 테이블
+content_table"					
+					type		  NULL	PK	FK	UQ
+"게시글 인덱스
+content_idx"		number			X	O	X	O
+"게시글 제목
+content_subject"	varchar2(500)	X	X	X	X
+"게시글 내용
+content_text"		long			X	X	X	X
+"첨부파일
+content_file"		varchar2(500)	O	X	X	X
+"게시글작성자인덱스
+content_writer_idx"	number			X	X	user_table(user_idx)	X
+"게시판 인덱스
+content_board_idx"	number			X	X	board_info_table(Board_info_idx)	X
+"작성 날짜
+content_date"		date			X	X	X	X
